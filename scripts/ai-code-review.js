@@ -1,4 +1,3 @@
-// scripts/ai-code-review.js
 const { execSync } = require('child_process');
 const https = require('https');
 const url = require('url');
@@ -82,15 +81,10 @@ try {
   const diffContent = diff.slice(0, 8000);
   console.log('📤 正在调用讯飞星火 AI 代码审查...');
   console.log('');
-
-  // 🔥 优化 Prompt：让 AI 直接输出最终结果，不要思考过程
   const prompt = `请审查以下 Vue.js 项目代码变更。
-
 变更文件：${files.join(', ')}
-
 变更内容：
 ${diffContent}
-
 请严格按照以下 JSON 格式输出审查结果，不要输出任何其他内容（包括思考过程、解释、Markdown等）：
 {"passed": true/false, "feedback": "审查意见"}
 
@@ -103,7 +97,6 @@ ${diffContent}
 5. Vue 组件结构不合理
 
 请只输出 JSON，不要输出任何其他内容。`;
-
   const requestBody = {
     model: AI_CONFIG.model,
     messages: [
@@ -127,16 +120,12 @@ ${diffContent}
     let result;
     try {
       const data = JSON.parse(response);
-      
-      // 🔥 讯飞星火：优先取 content，如果没有则取 reasoning_content
       let content = data.choices?.[0]?.message?.content || '';
-      
       // 如果 content 为空，尝试从 reasoning_content 中提取
       if (!content) {
         const reasoning = data.choices?.[0]?.message?.reasoning_content || '';
         console.log('⚠️ content 为空，尝试从 reasoning_content 提取...');
         console.log('📝 reasoning_content 内容:', reasoning);
-        
         // 尝试从 reasoning_content 中提取 JSON
         const jsonMatch = reasoning.match(/\{[\s\S]*"passed"[\s\S]*\}/);
         if (jsonMatch) {
@@ -153,12 +142,10 @@ ${diffContent}
           }
         }
       }
-
       if (!content) {
         console.log('⚠️ 无法获取 AI 审查结果，跳过检查');
         process.exit(0);
       }
-
       // 提取 JSON
       let jsonStr = content;
       if (content.includes('```json')) {
@@ -166,11 +153,9 @@ ${diffContent}
       } else if (content.includes('```')) {
         jsonStr = content.split('```')[1].split('```')[0];
       }
-
       result = JSON.parse(jsonStr.trim());
     } catch (e) {
       console.log('⚠️ JSON 解析失败，尝试从响应内容判断...');
-      
       // 从原始响应中判断
       const lowerResponse = response.toLowerCase();
       if (lowerResponse.includes('不通过') || 
@@ -184,7 +169,6 @@ ${diffContent}
         process.exit(0);
       }
     }
-
     // 根据结果判断
     if (result.passed === true) {
       console.log('✅ 代码审查通过！');
