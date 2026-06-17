@@ -19,6 +19,7 @@
     "@vue/cli-service": "~5.0.0",
     "eslint": "^7.32.0",
     "eslint-plugin-vue": "^8.0.3",
+    "lint-staged": "^16.4.0",
     "vue-template-compiler": "^2.6.14"
   },
   "eslintConfig": {
@@ -35,7 +36,7 @@
     },
     "rules": {}
   },
-   "gitHooks": {
+  "gitHooks": {
     "pre-commit": "lint-staged",
     "pre-push": "node scripts/ai-code-review.js"
   },

@@ -1,5 +1,7 @@
 // scripts/ai-code-review.js
 const { execSync } = require('child_process');
+const https = require('https');
+const url = require('url');
 
 // =============================================
 // 讯飞星火 API 配置
@@ -10,6 +12,45 @@ const AI_CONFIG = {
   model: 'spark-x'
 };
 // =============================================
+
+// 发送 HTTPS 请求的函数
+function sendHttpsRequest(apiUrl, headers, data) {
+  return new Promise((resolve, reject) => {
+    const parsedUrl = url.parse(apiUrl);
+    const postData = JSON.stringify(data);
+
+    const options = {
+      hostname: parsedUrl.hostname,
+      port: 443,
+      path: parsedUrl.path,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': headers.Authorization || '',
+        'Content-Length': Buffer.byteLength(postData)
+      }
+    };
+
+    const req = https.request(options, (res) => {
+      let responseData = '';
+
+      res.on('data', (chunk) => {
+        responseData += chunk;
+      });
+
+      res.on('end', () => {
+        resolve(responseData);
+      });
+    });
+
+    req.on('error', (error) => {
+      reject(error);
+    });
+
+    req.write(postData);
+    req.end();
+  });
+}
 
 console.log('');
 console.log('╔════════════════════════════════════════╗');
@@ -87,53 +128,54 @@ ${diffContent}
     user: '123456'
   };
 
-  // 调用讯飞星火 API（使用 curl）
-  const response = execSync(
-    `curl -s -X POST "${AI_CONFIG.url}" \
-      -H "Content-Type: application/json" \
-      -H "Authorization: ${AI_CONFIG.key}" \
-      -d '${JSON.stringify(requestBody)}'`,
-    { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 }
-  );
+  // 使用 HTTPS 发送请求（不依赖 curl）
+  sendHttpsRequest(
+    AI_CONFIG.url,
+    { Authorization: AI_CONFIG.key },
+    requestBody
+  ).then((response) => {
+    // 解析 AI 返回结果
+    let result;
+    try {
+      const data = JSON.parse(response);
+      const content = data.choices?.[0]?.message?.content || '';
 
-  // 解析 AI 返回结果
-  let result;
-  try {
-    const data = JSON.parse(response);
-    // 讯飞星火返回格式与 OpenAI 兼容
-    const content = data.choices?.[0]?.message?.content || '';
+      let jsonStr = content;
+      if (content.includes('```json')) {
+        jsonStr = content.split('```json')[1].split('```')[0];
+      } else if (content.includes('```')) {
+        jsonStr = content.split('```')[1].split('```')[0];
+      }
 
-    let jsonStr = content;
-    if (content.includes('```json')) {
-      jsonStr = content.split('```json')[1].split('```')[0];
-    } else if (content.includes('```')) {
-      jsonStr = content.split('```')[1].split('```')[0];
+      result = JSON.parse(jsonStr.trim());
+    } catch (e) {
+      console.log('⚠️ AI 响应解析失败，跳过检查');
+      console.log('📝 原始响应:', response.slice(0, 500));
+      process.exit(0);
     }
 
-    result = JSON.parse(jsonStr.trim());
-  } catch (e) {
-    console.log('⚠️ AI 响应解析失败，跳过检查');
-    console.log('📝 原始响应:', response.slice(0, 500));
-    process.exit(0);
-  }
-
-  // 输出检查结果
-  if (result.passed) {
-    console.log('✅ AI 代码审查通过！');
-    if (result.feedback) {
-      console.log(`📝 ${result.feedback}`);
+    // 输出检查结果
+    if (result.passed) {
+      console.log('✅ AI 代码审查通过！');
+      if (result.feedback) {
+        console.log(`📝 ${result.feedback}`);
+      }
+      process.exit(0);
+    } else {
+      console.log('❌ AI 代码审查未通过！');
+      console.log('');
+      console.log('📝 反馈意见：');
+      console.log(result.feedback || '无详细反馈');
+      console.log('');
+      console.log('💡 请根据反馈修改代码后，重新提交推送。');
+      console.log('   （如需跳过检查，可使用: git push --no-verify）');
+      process.exit(1);
     }
+  }).catch((error) => {
+    console.error('❌ AI API 调用失败:', error.message);
+    console.log('⚠️ 检查发生异常，跳过检查以保证推送继续进行');
     process.exit(0);
-  } else {
-    console.log('❌ AI 代码审查未通过！');
-    console.log('');
-    console.log('📝 反馈意见：');
-    console.log(result.feedback || '无详细反馈');
-    console.log('');
-    console.log('💡 请根据反馈修改代码后，重新提交推送。');
-    console.log('   （如需跳过检查，可使用: git push --no-verify）');
-    process.exit(1);
-  }
+  });
 
 } catch (error) {
   console.error('❌ 执行错误:', error.message);
