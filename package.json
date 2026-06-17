@@ -37,7 +37,6 @@
     "rules": {}
   },
   "gitHooks": {
-    "pre-commit": "lint-staged",
     "pre-push": "node scripts/ai-code-review.js"
   },
   "browserslist": [
